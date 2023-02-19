@@ -1,0 +1,98 @@
+import tiktok
+import cv2
+import numpy as np
+import mediapipe as mp
+import random
+
+# Set up the TikTok effect
+@tiktok.effect("snake_nose_control")
+def snake_nose_control(video: np.ndarray):
+    # Set up the Mediapipe nose detector
+    mp_drawing = mp.solutions.drawing_utils
+    mp_holistic = mp.solutions.holistic
+    holistic = mp_holistic.Holistic()
+
+    # Set up the snake game
+    screen_width = 640
+    screen_height = 480
+    block_size = 10
+    snake_speed = 10
+    snake_color = (0, 255, 0)
+    food_color = (255, 0, 0)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    snake = [[screen_width//2, screen_height//2]]
+    direction = "RIGHT"
+    food_position = [random.randrange(0, screen_width//10)*block_size, random.randrange(0, screen_height//10)*block_size]
+
+    # Set up the game loop
+    game_over = False
+    while not game_over:
+        success, image = video.read()
+
+        # Use Mediapipe to detect the user's nose position
+        image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        results = holistic.process(image)
+        nose_x = 0
+        nose_y = 0
+        if results.pose_landmarks:
+            nose_x = int(results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].x * screen_width)
+            nose_y = int(results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].y * screen_height)
+
+        image.flags.writeable = True
+
+        # Update the snake's direction based on the user's nose position
+        if nose_x < snake[0][0]:
+            direction = "LEFT"
+        elif nose_x > snake[0][0]:
+            direction = "RIGHT"
+        elif nose_y < snake[0][1]:
+            direction = "UP"
+        elif nose_y > snake[0][1]:
+            direction = "DOWN"
+
+        # Move the snake
+        if direction == "LEFT":
+            snake[0][0] -= snake_speed
+        elif direction == "RIGHT":
+            snake[0][0] += snake_speed
+        elif direction == "UP":
+            snake[0][1] -= snake_speed
+        elif direction == "DOWN":
+            snake[0][1] += snake_speed
+
+        # Check for game over conditions
+        if snake[0][0] < 0 or snake[0][0] >= screen_width or snake[0][1] < 0 or snake[0][1] >= screen_height:
+            game_over = True
+        for block in snake[1:]:
+            if snake[0] == block:
+                game_over = True
+
+        # Check if the snake has eaten the food
+        if snake[0][0] == food_position[0] and snake[0][1] == food_position[1]:
+            food_position = [random.randrange(0, screen_width//10)*block_size, random.randrange(0, screen_height//10)*block_size]
+            snake.append(snake[-1])
+
+        # Update the screen
+        image = np.zeros((screen_height, screen_width, 3), np.uint8)
+        cv2.putText(image, "Score: " + str(len(snake) - (snake) - 1), (10, 30), font, 1, (255, 255, 255), 2)
+for block in snake:
+cv2.rectangle(image, (block[0], block[1]), (block[0]+block_size, block[1]+block_size), snake_color, -1)
+cv2.rectangle(image, (food_position[0], food_position[1]), (food_position[0]+block_size, food_position[1]+block_size), food_color, -1)
+    # Display the image
+    cv2.imshow("Snake Nose Control", image)
+
+    # Check for game exit conditions
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+    if game_over:
+        cv2.putText(image, "Game Over! Final Score: " + str(len(snake) - 1), (screen_width//2-100, screen_height//2), font, 1, (255, 255, 255), 2)
+        cv2.imshow("Snake Nose Control", image)
+        cv2.waitKey(5000)
+        break
+
+# Clean up
+video.release()
+cv2.destroyAllWindows()
+
